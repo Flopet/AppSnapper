@@ -1,4 +1,3 @@
-# crashtest-app config (should be backed up)
 app_name: crashtest
 theme: dark
 data_version: 1

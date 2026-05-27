@@ -347,28 +347,28 @@ STOP={stop_flag}                       # 1 = stop container(s) during file copy
 DEST="$DEST_ROOT/$APP"            # this app's folder inside the backups root
 DUMP_DIR="$DEST/dumps"            # database dumps live here
 DATA_DIR="$DEST/appdata"          # mirrored appdata lives here
-LOCKFILE="/tmp/backup-$APP.lock"
+LOCKDIR="/tmp/backup-$APP.lock.d"  # atomic-mkdir lock (portable; no 'flock' needed)
 LOGFILE="$DEST/backup.log"
 # --------------------------------------------------------------------------- #
 
 mkdir -p "$DEST" "$DUMP_DIR" "$DATA_DIR"
 
-# Write a manifest describing how to restore this app. restore.sh reads this.
-cat > "$DEST/restore-manifest.env" <<'MANIFEST'
-{manifest}MANIFEST
-
 log() {{ echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOGFILE"; }}
 
-# Prevent two runs overlapping (e.g. a slow run still going at the next tick).
-exec 9>"$LOCKFILE"
-if ! flock -n 9; then
-    log "Another run is in progress; exiting."
+# Prevent two runs overlapping. An atomic 'mkdir' is the lock, so this works
+# everywhere -- including macOS, which has no util-linux 'flock'.
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+    log "Another run is in progress (lock: $LOCKDIR); exiting."
     exit 0
 fi
 
 require() {{ command -v "$1" >/dev/null 2>&1 || {{ log "ERROR: '$1' not found on host"; exit 1; }}; }}
 require docker
 require rsync
+
+# Write a manifest describing how to restore this app. restore.sh reads this.
+cat > "$DEST/restore-manifest.env" <<'MANIFEST'
+{manifest}MANIFEST
 
 STOPPED=0
 start_containers() {{
@@ -378,8 +378,9 @@ start_containers() {{
         STOPPED=0
     fi
 }}
-# Guarantee the app comes back up no matter how the script exits.
-trap 'start_containers' EXIT
+# On exit: restart the app (if we stopped it) and release the lock.
+cleanup() {{ start_containers; rmdir "$LOCKDIR" 2>/dev/null || true; }}
+trap cleanup EXIT
 
 log "===== Backup of $APP starting ====="
 
