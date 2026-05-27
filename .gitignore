@@ -8,3 +8,6 @@ backup-*.sh
 # python bytecode
 __pycache__/
 *.pyc
+
+# crash-test: regenerable noise (kept on disk, not in git)
+crashtest-stack/appdata/cache/tempfile.bin

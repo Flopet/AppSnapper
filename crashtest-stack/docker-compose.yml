@@ -1,0 +1,49 @@
+# crash-test stack for the backup/restore toolkit
+# ------------------------------------------------
+# Exercises every code path at once:
+#   - crashtest-app       : a do-nothing container whose ./appdata we back up
+#                           (tests appdata rsync, excludes, and service stop/start)
+#   - app.db (in appdata) : tests the SQLite cold-copy dump/restore path
+#   - crashtest-postgres  : tests the Postgres docker-exec dump/restore path
+#   - crashtest-mariadb   : tests the MySQL/MariaDB docker-exec dump/restore path
+#
+# Bring it up:   docker compose up -d
+# (Seed data is loaded automatically on first start.)
+
+name: crashtest
+
+services:
+  crashtest-app:
+    image: alpine:3.20
+    container_name: crashtest-app
+    command: ["sh", "-c", "echo crashtest-app up; while true; do sleep 3600; done"]
+    volumes:
+      - ./appdata:/appdata
+    restart: unless-stopped
+
+  crashtest-postgres:
+    image: postgres:16-alpine
+    container_name: crashtest-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: testdb
+    volumes:
+      - ./seed/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - crashtest-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  crashtest-mariadb:
+    image: mariadb:11
+    container_name: crashtest-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpw
+      MARIADB_DATABASE: testdb
+    volumes:
+      - ./seed/mariadb-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - crashtest-mariadata:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  crashtest-pgdata:
+  crashtest-mariadata:
