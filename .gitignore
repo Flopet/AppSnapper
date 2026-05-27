@@ -4,5 +4,3 @@ backup-*.sh
 *.swp
 .DS_Store
 
-# durable history export (recreated each snapshot)
-backup-toolkit.history.bundle
