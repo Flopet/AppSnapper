@@ -11,3 +11,9 @@ __pycache__/
 
 # crash-test: regenerable noise (kept on disk, not in git)
 crashtest-stack/appdata/cache/tempfile.bin
+
+# crash-test runtime artifacts
+crashtest-backups/
+backup-crashtest.sh
+.crashtest-last-run.log
+.safety-*/
