@@ -250,6 +250,45 @@ def db_dump_snippet(db):
 
 
 # --------------------------------------------------------------------------- #
+# Restore manifest: a sourceable file restore.sh reads to put an app back.
+# Each DB is one line of 8 pipe-separated fields:
+#   type|container|user|password|name|all|file|authdb
+# --------------------------------------------------------------------------- #
+def manifest_db_entries(dbs):
+    lines = []
+    for db in dbs:
+        t = db["type"]
+        if t == "sqlite":
+            fields = ["sqlite", "", "", "", "", "", db["file"], ""]
+        elif t in ("postgres", "mysql"):
+            fields = [t, db["container"], db["user"], db.get("password", ""),
+                      "" if db.get("all") else db.get("name", ""),
+                      "1" if db.get("all") else "0", "", ""]
+        elif t == "mongo":
+            fields = ["mongo", db["container"], db["user"], db.get("password", ""),
+                      db.get("name", ""), "", "", db.get("authdb", "")]
+        else:
+            continue
+        lines.append("|".join(fields))
+    return "\n".join(lines)
+
+
+def manifest_text(cfg):
+    containers = " ".join(cfg["containers"])
+    entries = manifest_db_entries(cfg["dbs"])
+    return (
+        f"APP='{cfg['app']}'\n"
+        f"APPDATA='{cfg['appdata']}'\n"
+        f"CONTAINER_MODE='{cfg['container_mode']}'\n"
+        f"COMPOSE_DIR='{cfg['compose_dir']}'\n"
+        f"COMPOSE_SERVICE='{cfg['compose_service']}'\n"
+        f"CONTAINERS='{containers}'\n"
+        f"STOP='{1 if cfg['stop'] else 0}'\n"
+        f"DB_ENTRIES='{entries}'\n"
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Build the full bash script
 # --------------------------------------------------------------------------- #
 def build_script(cfg):
@@ -279,6 +318,7 @@ def build_script(cfg):
         db_section = "    log \"  no databases configured\"\n"
 
     stop_flag = "1" if cfg["stop"] else "0"
+    manifest = manifest_text(cfg)
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     script = f"""#!/usr/bin/env bash
@@ -312,6 +352,10 @@ LOGFILE="$DEST/backup.log"
 # --------------------------------------------------------------------------- #
 
 mkdir -p "$DEST" "$DUMP_DIR" "$DATA_DIR"
+
+# Write a manifest describing how to restore this app. restore.sh reads this.
+cat > "$DEST/restore-manifest.env" <<'MANIFEST'
+{manifest}MANIFEST
 
 log() {{ echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOGFILE"; }}
 
@@ -398,6 +442,8 @@ def main():
     print(f"       {cfg['cron']}  /bin/bash {script_runtime_path} >> {cron_log} 2>&1\n")
     print("  4. Point Duplicati at the backups root so it captures every app:")
     print(f"       {cfg['dest_root']}")
+    print("\nNote: each run writes a 'restore-manifest.env' into the app's backup")
+    print("folder. Keep restore.sh in the backups root to restore any app from it.")
 
 
 if __name__ == "__main__":
