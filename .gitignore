@@ -1,0 +1,5 @@
+# generated per-app backup scripts (regenerate from the wizard)
+backup-*.sh
+# editor / OS noise
+*.swp
+.DS_Store
