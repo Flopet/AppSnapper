@@ -158,11 +158,15 @@ def collect():
 
     # ---- excludes --------------------------------------------------------- #
     banner("Excludes (save space)")
+    # Directory-name patterns (no leading slash, trailing slash) match a dir of
+    # that name at ANY depth -- including the top level. A pattern like
+    # "*/cache/*" would MISS a top-level "cache/", so we use "cache/" instead.
     default_excludes = [
-        "*/cache/*", "*/Cache/*", "*/Caches/*",
-        "*/transcode/*", "*/transcodes/*", "*/Transcode/*",
-        "*/thumbnails/*", "*/metadata/*Cache*",
-        "*/logs/*", "*/log/*", "*.log", "*.tmp", "*/tmp/*",
+        "cache/", "Cache/", "Caches/",
+        "transcode/", "transcodes/", "Transcode/",
+        "thumbnails/", "Thumbnails/",
+        "logs/", "log/", "tmp/", "temp/",
+        "*.log", "*.tmp",
     ]
     if ask_yn("Exclude common regenerable junk (caches, transcodes, logs, *.tmp)?", default=True):
         cfg["excludes"] = list(default_excludes)
@@ -208,9 +212,10 @@ def db_dump_snippet(db):
         """)
 
     if t == "postgres":
-        target = "--all" if db.get("all") else f"-d {sq(db['name'])}"
         tool = "pg_dumpall" if db.get("all") else "pg_dump"
-        args = "" if db.get("all") else f"-d {sq(db['name'])}"
+        # --clean --if-exists makes the dump DROP objects before recreating them,
+        # so restoring REPLACES existing data instead of appending to it.
+        args = "--clean --if-exists" if db.get("all") else f"--clean --if-exists -d {sq(db['name'])}"
         fname = "all-databases" if db.get("all") else db.get("name", "db")
         pw = f"-e PGPASSWORD={sq(db['password'])} " if db.get("password") else ""
         return textwrap.dedent(f"""\

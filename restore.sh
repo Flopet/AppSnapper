@@ -90,7 +90,8 @@ dump_current_dbs() {
             postgres)
                 db_up "$container"
                 local fn; [ "$allflag" = "1" ] && fn="all-databases" || fn="$name"
-                local tool args; [ "$allflag" = "1" ] && { tool="pg_dumpall"; args=""; } || { tool="pg_dump"; args="-d $name"; }
+                # --clean --if-exists so restoring this snapshot REPLACES data, not appends.
+                local tool args; [ "$allflag" = "1" ] && { tool="pg_dumpall"; args="--clean --if-exists"; } || { tool="pg_dump"; args="--clean --if-exists -d $name"; }
                 if [ "$DRY" = "1" ]; then
                     echo "  [dry-run] docker exec ${password:+-e PGPASSWORD=***} $container $tool -U $user $args > $dd/pg-$fn.sql"
                 else
