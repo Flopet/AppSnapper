@@ -221,13 +221,17 @@ def db_dump_snippet(db):
         """)
 
     if t == "mysql":
-        sel = "--all-databases" if db.get("all") else f"--databases {sq(db['name'])}"
+        sel = "--all-databases" if db.get("all") else f"--databases {db['name']}"
         fname = "all-databases" if db.get("all") else db.get("name", "db")
         pw = f"-e MYSQL_PWD={sq(db['password'])} " if db.get("password") else ""
+        inner = f"-u{db['user']} --single-transaction --quick {sel}"
+        cmd = (f"if command -v mariadb-dump >/dev/null 2>&1; then mariadb-dump {inner}; "
+               f"else mysqldump {inner}; fi")
         return textwrap.dedent(f"""\
             # --- MySQL/MariaDB via container {db['container']} ---
+            # MariaDB 11+ ships 'mariadb-dump' (no 'mysqldump'); MySQL ships 'mysqldump'.
             OUT="$DUMP_DIR/mysql-{fname}.sql"
-            docker exec {pw}{sq(db['container'])} mysqldump -u{sq(db['user'])} --single-transaction --quick {sel} > "$OUT"
+            docker exec {pw}{sq(db['container'])} sh -c {sq(cmd)} > "$OUT"
             log "  mysql dumped -> $OUT"
         """)
 

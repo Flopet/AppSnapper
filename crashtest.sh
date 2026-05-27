@@ -143,9 +143,10 @@ section "BACKUP  (run it; verify outputs, excludes, and restart)"
 if bash "$BACKUP_SCRIPT" >>"$LOG" 2>&1; then pass "backup script ran without error"; else fail "backup script exited non-zero (see $LOG)"; fi
 D="$BK/crashtest"
 [ -f "$D/restore-manifest.env" ] && pass "manifest written" || fail "manifest missing"
-[ -f "$D/dumps/$(basename "$DB_APP").sqlite" ] && pass "sqlite dump present" || fail "sqlite dump missing"
-[ -f "$D/dumps/pg-testdb.sql" ] && pass "postgres dump present" || fail "postgres dump missing"
-if [ -f "$D/dumps/mysql-testdb.sql" ]; then pass "mariadb dump present"; else fail "mariadb dump missing -- likely 'mysqldump' absent in mariadb:11 (needs mariadb-dump)"; fi
+# Validate dumps by CONTENT, not mere existence (an error message is still a file).
+if head -c 16 "$D/dumps/$(basename "$DB_APP").sqlite" 2>/dev/null | grep -q "SQLite format"; then pass "sqlite dump is a real db"; else fail "sqlite dump invalid/missing"; fi
+if grep -q "INSERT INTO" "$D/dumps/pg-testdb.sql" 2>/dev/null; then pass "postgres dump has real data"; else fail "postgres dump invalid (no INSERTs)"; fi
+if grep -q "INSERT INTO" "$D/dumps/mysql-testdb.sql" 2>/dev/null; then pass "mariadb dump has real data"; else fail "mariadb dump invalid -- check 'mariadb-dump' vs 'mysqldump' ($(head -c 80 "$D/dumps/mysql-testdb.sql" 2>/dev/null))"; fi
 [ -f "$D/appdata/config.yml" ] && pass "appdata config.yml backed up" || fail "appdata config.yml missing from backup"
 [ -f "$D/appdata/data/notes.txt" ] && pass "appdata data/notes.txt backed up" || fail "appdata notes.txt missing from backup"
 [ ! -e "$D/appdata/cache/tempfile.bin" ] && pass "exclude worked: cache/ not in backup" || fail "exclude FAILED: cache/ was backed up"

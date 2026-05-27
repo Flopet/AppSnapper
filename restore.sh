@@ -99,10 +99,12 @@ dump_current_dbs() {
             mysql)
                 db_up "$container"
                 local fn sel; [ "$allflag" = "1" ] && { fn="all-databases"; sel="--all-databases"; } || { fn="$name"; sel="--databases $name"; }
+                # MariaDB 11+ has 'mariadb-dump' (no 'mysqldump'); MySQL has 'mysqldump'.
+                local mdump="if command -v mariadb-dump >/dev/null 2>&1; then mariadb-dump -u$user --single-transaction --quick $sel; else mysqldump -u$user --single-transaction --quick $sel; fi"
                 if [ "$DRY" = "1" ]; then
-                    echo "  [dry-run] docker exec ${password:+-e MYSQL_PWD=***} $container mysqldump -u$user --single-transaction --quick $sel > $dd/mysql-$fn.sql"
+                    echo "  [dry-run] docker exec ${password:+-e MYSQL_PWD=***} $container sh -c '<mariadb-dump|mysqldump> $sel' > $dd/mysql-$fn.sql"
                 else
-                    docker exec ${password:+-e MYSQL_PWD=$password} "$container" mysqldump -u"$user" --single-transaction --quick $sel > "$dd/mysql-$fn.sql"
+                    docker exec ${password:+-e MYSQL_PWD=$password} "$container" sh -c "$mdump" > "$dd/mysql-$fn.sql"
                 fi ;;
             mongo)
                 db_up "$container"
@@ -147,10 +149,12 @@ import_dbs() {
                 local fn; [ "$allflag" = "1" ] && fn="all-databases" || fn="$name"
                 local in="$dd/mysql-$fn.sql"
                 note "  mysql: $in -> container $container"
+                # MariaDB 11+ uses the 'mariadb' client; MySQL uses 'mysql'.
+                local mcli="if command -v mariadb >/dev/null 2>&1; then mariadb -u$user; else mysql -u$user; fi"
                 if [ "$DRY" = "1" ]; then
-                    echo "  [dry-run] docker exec -i ${password:+-e MYSQL_PWD=***} $container mysql -u$user < $in"
+                    echo "  [dry-run] docker exec -i ${password:+-e MYSQL_PWD=***} $container sh -c '<mariadb|mysql>' < $in"
                 else
-                    [ -f "$in" ] && docker exec -i ${password:+-e MYSQL_PWD=$password} "$container" mysql -u"$user" < "$in" || echo "  WARN: missing $in"
+                    [ -f "$in" ] && docker exec -i ${password:+-e MYSQL_PWD=$password} "$container" sh -c "$mcli" < "$in" || echo "  WARN: missing $in"
                 fi ;;
             mongo)
                 db_up "$container"
@@ -206,7 +210,9 @@ hr; echo "Restore tool  (backups root: $ROOT)"
 [ "$DRY" = "1" ] && echo ">>> DRY RUN: nothing will actually change <<<"
 hr
 
-mapfile -t MANIFESTS < <(find "$ROOT" -mindepth 2 -maxdepth 2 -name restore-manifest.env 2>/dev/null | sort)
+# Portable manifest list (no 'mapfile' -- macOS ships bash 3.2 which lacks it).
+MANIFESTS=()
+while IFS= read -r _m; do MANIFESTS+=("$_m"); done < <(find "$ROOT" -mindepth 2 -maxdepth 2 -name restore-manifest.env 2>/dev/null | sort)
 if [ "${#MANIFESTS[@]}" -eq 0 ]; then
     echo "No restore-manifest.env files found under $ROOT."
     echo "Run a backup first, or set BACKUP_ROOT to the right directory."
