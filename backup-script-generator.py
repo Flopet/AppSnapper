@@ -407,7 +407,10 @@ fi
 # 3) Mirror appdata into the backups dir (--delete keeps it an exact copy,
 #    so old/removed files don't accumulate -> "overwrite latest").
 log "Copying appdata -> $DATA_DIR"
-rsync -a --delete \\
+# --delete-excluded also removes destination files that match an --exclude.
+# Without it, a file that a previous (broken) run let through would linger in
+# the mirror forever, because --delete by default "protects" excluded files.
+rsync -a --delete --delete-excluded \\
 {exclude_lines}    "$APPDATA"/ "$DATA_DIR"/
 
 # 4) Restart happens automatically via the EXIT trap.
